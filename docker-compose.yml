@@ -1,0 +1,82 @@
+version: "3.9"
+
+services:
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  call_analytics_api:
+    image: parlona/parlonacore-api:${PARLONACORE_VERSION}
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      POSTGRES_DSN: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      RUN_DB_MIGRATIONS: "1"
+      SERVICE_NAME: call_analytics_api
+      STORAGE_DIR: /app/storage
+    depends_on:
+      - redis
+      - db
+    ports:
+      - "8080:8080"
+    volumes:
+      - audio_storage:/app/storage
+    restart: unless-stopped
+
+  stt_service:
+    image: parlona/parlonacore-stt:${PARLONACORE_VERSION}
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      SERVICE_NAME: stt_service
+      STORAGE_DIR: /app/storage
+      STT_DIARIZATION_MODE: "stereo_channels"
+      STT_STEREO_SPEAKER_MAPPING: "0:manager,1:customer"
+      WHISPER_MODEL_DIR: /models/whisper
+      WHISPER_LOCAL_ONLY: "0"     # Set to "1" for offline mode after warming cache
+      HF_HUB_OFFLINE: "0"         # Set to "1" for offline mode after warming cache
+    depends_on:
+      - redis
+    volumes:
+      - audio_storage:/app/storage
+      - ./models/whisper_cache:/models/whisper
+    # Uncomment the following line on GPU hosts with nvidia-container-toolkit installed:
+    # gpus: all
+    restart: unless-stopped
+
+  summary_service:
+    image: parlona/parlonacore-summary:${PARLONACORE_VERSION}
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      SERVICE_NAME: summary_service
+    depends_on:
+      - redis
+    restart: unless-stopped
+
+  postprocess_service:
+    image: parlona/parlonacore-postprocess:${PARLONACORE_VERSION}
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      POSTGRES_DSN: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      RUN_DB_MIGRATIONS: "1"
+      SERVICE_NAME: postprocess_service
+    depends_on:
+      - redis
+      - db
+    restart: unless-stopped
+
+volumes:
+  audio_storage:
+  postgres_data:

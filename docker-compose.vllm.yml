@@ -1,0 +1,52 @@
+version: "3.9"
+
+###############################################################
+# docker-compose.vllm.yml
+#
+# Overlay for GPU + vLLM deployment.
+# Used together with the base docker-compose.yml:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.vllm.yml up -d
+#
+# The deploy_parlonacore.sh script will do this for you in "vllm" profile.
+###############################################################
+
+services:
+  #############################################################
+  # vLLM SERVICE
+  #
+  # Comment this entire block out if vLLM runs on a different
+  # machine or is managed outside of this compose stack.
+  #############################################################
+  vllm:
+    image: vllm/vllm-openai:latest
+    # vLLM command: model, host, port configured via env
+    command: >
+      --model ${VLLM_MODEL}
+      --host 0.0.0.0
+      --port ${VLLM_PORT}
+    environment:
+      # Example: limit GPU memory fraction; tune as needed
+      VLLM_WORKER_GPU_MEMORY_FRACTION: 0.9
+    # Expose vLLM port to host; inside network it's reachable as "vllm:${VLLM_PORT}"
+    ports:
+      - "${VLLM_PORT:-8000}:${VLLM_PORT:-8000}"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: ["gpu"]
+
+  #############################################################
+  # STT SERVICE (Faster-Whisper using GPU)
+  #
+  # This section extends/overrides the "stt_service" defined in
+  # your base docker-compose.yml. It does NOT redefine the whole
+  # service, only the additional GPU-related bits.
+  #############################################################
+  stt_service:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: ["gpu"]
