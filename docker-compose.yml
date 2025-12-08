@@ -9,6 +9,8 @@ services:
 
   db:
     image: postgres:16
+    env_file:
+      - .env
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
@@ -21,6 +23,8 @@ services:
 
   call_analytics_api:
     image: parlona/parlonacore-api:${PARLONACORE_VERSION}
+    env_file:
+      - .env
     environment:
       REDIS_URL: redis://redis:6379/0
       POSTGRES_DSN: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
@@ -38,6 +42,8 @@ services:
 
   stt_service:
     image: parlona/parlonacore-stt:${PARLONACORE_VERSION}
+    env_file:
+      - .env
     environment:
       REDIS_URL: redis://redis:6379/0
       SERVICE_NAME: stt_service
@@ -58,6 +64,8 @@ services:
 
   summary_service:
     image: parlona/parlonacore-summary:${PARLONACORE_VERSION}
+    env_file:
+      - .env
     environment:
       REDIS_URL: redis://redis:6379/0
       SERVICE_NAME: summary_service
@@ -67,6 +75,8 @@ services:
 
   postprocess_service:
     image: parlona/parlonacore-postprocess:${PARLONACORE_VERSION}
+    env_file:
+      - .env
     environment:
       REDIS_URL: redis://redis:6379/0
       POSTGRES_DSN: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
