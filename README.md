@@ -1,151 +1,149 @@
-# ParlonaCore
+# ParlonaCore Call Analytics Framework
 
-This repository contains ParlonaCore – an open-source voice intelligence stack built to analyze call audio, transcribe with Whisper, diarize agent/customer, and store structured dialogues in Postgres. It's self-hosted via Docker.
+ParlonaCore is an open-source framework for processing and analyzing voice conversations. It provides a complete pipeline for speech-to-text transcription, conversation summarization, and structured data storage.
 
-## Overview
+## Features
 
-Services included in this step:
+- **Speech-to-Text Transcription**: Powered by Faster-Whisper for accurate transcription with optional speaker diarization
+- **Conversation Summarization**: Automatic generation of concise summaries using LLMs
+- **Secure Architecture**: Redis with password authentication and protected mode
+- **Flexible Deployment**: Pre-built Docker images for easy deployment
+- **Multi-Backend LLM Support**: Compatible with OpenAI, vLLM, Groq, and Ollama
+- **Database Storage**: PostgreSQL integration for persistent data storage
+- **API Key Authentication**: Secure access to protected endpoints with generated API keys
 
-1. **call_analytics_api** – FastAPI service exposing HTTP endpoints to create jobs, list jobs, and fetch job status.
-2. **stt_service** – Real faster-whisper speech-to-text worker (supports stereo-channel diarisation) that writes transcripts into Redis and forwards jobs to the summary queue.
-3. **summary_service** – Worker that simulates summarization and tagging, forwarding jobs to post-processing.
-4. **postprocess_service** – Worker that simulates delivering final analytics to an external system.
-5. **Redis** – Serves as both temporary storage for job metadata and a message broker via Redis lists.
+## Quick Start
 
-Each worker logs its activity and updates job status. STT results are persisted in the Redis job hash (`stt_text`, `stt_segments`, `stt_language`, metadata, etc.) for downstream services to consume.
+1. Copy the example environment file:
+   ```bash
+   cp .env.example .env
+   ```
 
-## Running the stack
+2. Edit `.env` to set your desired configuration, including strong passwords:
+   ```bash
+   # Change to a strong password
+   REDIS_PASSWORD=your_strong_password_here
+   
+   # Database credentials
+   POSTGRES_USER=your_db_user
+   POSTGRES_PASSWORD=your_db_password
+   POSTGRES_DB=your_db_name
+   ```
 
-### For end-users / customers (prebuilt images):
+3. Run the deployment script to generate an API key and start services:
+   ```bash
+   ./deploy_parlonacore.sh
+   ```
 
-```bash
-cp .env.example .env
-docker compose pull
-docker compose up -d
-```
+4. The deployment script will display your API key. Use this key to authenticate API requests.
 
-This command will start Redis and all service containers. The API becomes available at `http://localhost:8080`.
+## Architecture
 
-### For developers (build from source):
+The system consists of four main services orchestrated by Docker Compose:
 
-```bash
-cp .env.example .env
-docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
-```
+1. **API Service** (`call_analytics_api`): REST API for job submission and result retrieval
+2. **STT Service** (`stt_service`): Speech-to-text processing with automatic GPU/CPU detection
+3. **Summary Service** (`summary_service`): Conversation summarization using external LLMs
+4. **Postprocess Service** (`postprocess_service`): Data persistence to PostgreSQL
 
-## Example usage
+Services communicate through Redis queues for asynchronous processing.
 
-Create a new job:
+## Security Notice
 
-```bash
-curl -X POST http://localhost:8080/v1/jobs \
-  -H "Content-Type: application/json" \
-  -d '{"audio_path": "/tmp/call1.wav"}'
-```
+Starting with version 1.0.0, ParlonaCore implements enhanced security measures:
 
-Upload a local file via multipart (metadata optional):
+1. **Redis Authentication**: Redis now requires password authentication
+2. **Network Isolation**: Services communicate through isolated Docker networks
+3. **Protected Mode**: Redis runs in protected mode to prevent unauthorized access
+4. **API Key Authentication**: All protected endpoints require a valid API key
 
-```bash
-curl -X POST http://localhost:8080/v1/jobs/upload \
-  -F "file=@/path/to/dialogue.wav" \
-  -F 'metadata={"agent_id":"6001"};type=application/json'
-```
+**Important**: Always change the default `REDIS_PASSWORD` in your `.env` file to a strong, unique password before deploying.
 
-Sample response:
+## API Authentication
 
-```json
-{
-  "job_id": "<uuid>",
-  "status": "queued",
-  "audio_path": "/tmp/call1.wav"
-}
-```
-
-Fetch job status:
-
-```bash
-curl http://localhost:8080/v1/jobs/<job_id>
-```
-
-List recent jobs:
+After running the deployment script, an API key is automatically generated and added to your `.env` file. This key is required for all protected endpoints:
 
 ```bash
-curl http://localhost:8080/v1/jobs
+# Example API key (automatically generated)
+CALL_API_KEY=71c9ea972b799c0b9029cd1fc4cb62d51db11ed1b2ff268de1fa259221d49497
 ```
 
-Observe worker logs in the Docker Compose output to verify the pipeline flow:
-- STT worker consumes `queue:stt_jobs`, performs real faster-whisper transcription, and writes transcripts/segments/metadata to the job hash.
-- Summary worker consumes `queue:summary_jobs` and writes dummy summaries/tags.
-- Postprocess worker consumes `queue:postprocess_jobs` and marks jobs as `done`.
-
-## STT configuration & diarisation
-
-Environment variables (set in `.env` or Compose service) control STT behavior:
-
-| Variable | Default | Description |
-| --- | --- | --- |
-| `STT_ENGINE` | `faster_whisper` | STT backend identifier. |
-| `STT_MODEL_NAME` | `small` | faster-whisper model to load (e.g. `base`, `medium`...). |
-| `STT_DEVICE` | `auto` | `cuda`, `cpu`, or `auto` (auto uses CUDA if available). |
-| `STT_COMPUTE_TYPE` | `float16` | faster-whisper compute type (`float16`, `int8`, etc.). |
-| `STT_DIARIZATION_MODE` | `none` | `none` for standard transcription, `stereo_channels` to split L/R channels. |
-| `STT_STEREO_SPEAKER_MAPPING` | `0:speaker_1,1:speaker_2` | Mapping of channel index to label (e.g. `0:agent,1:customer`). |
-| `STT_LANGUAGE`, `STT_TASK`, `STT_BEAM_SIZE`, etc. | (see `backend/stt_service/app/config.py`) | Advanced faster-whisper knobs. |
-
-In stereo diarisation mode the worker splits each channel into a mono file, transcribes them independently, labels segments with the configured speaker names, and merges them on the shared timeline. Segment data is stored as JSON in `stt_segments`.
-
-When you upload a file, it is stored under `/app/storage/<job_id>/` inside the containers, and the STT worker uses that shared volume automatically. For remote URLs submitted via JSON, ensure the path is reachable from within the containers.
-
-### Mapping host audio paths inside containers
-
-Containers cannot access host paths directly. Either:
-1. Mount the directory containing your audio into the `stt_service` container, e.g.:
-
-```yaml
-  stt_service:
-    volumes:
-      - /Users/you/Audio:/data/audio
-```
-
-2. And/or configure `STT_AUDIO_PATH_MAPPINGS` so host-style paths get rewritten inside the worker. Example:
-
-```env
-STT_AUDIO_PATH_MAPPINGS=/Users/you/Audio=/data/audio
-```
-
-Multiple mappings can be separated with semicolons, or defined as JSON `[["/host/path","/container/path"], ...]`. The worker tries each mapping and falls back to the original path. Jobs will fail with a helpful error if none of the mapped paths exist.
-
-## Next steps
-
-Future iterations will replace dummy logic with real STT/LLM models, introduce persistent storage (Postgres), and add a UI dashboard.
-
-## Deploying ParlonaCore on a GPU Host with vLLM
-
-This setup is intended for environments where:
-
-- You have **one or more NVIDIA GPUs**.
-- You run **vLLM** as an OpenAI-compatible API (either inside the same Docker stack or on a separate machine).
-- You want **Faster-Whisper STT** to use GPU as well.
-
-### 1. Prerequisites
-
-1. **NVIDIA drivers** installed on the host.
-2. **NVIDIA Container Toolkit** installed so Docker containers can access the GPUs.  
-   See NVIDIA’s docs for installation instructions.
-3. `docker` and `docker compose` installed.
-
-### 2. Files involved
-
-In the project root you should have:
-
-- `docker-compose.yml` – base stack (4 core services).
-- `docker-compose.vllm.yml` – GPU/vLLM overlay (added vLLM service + GPU for STT).
-- `.env.vllm.example` – example configuration for GPU + vLLM host.
-- `deploy_parlonacore.sh` – deployment helper script.
-
-### 3. Create and edit `.env.vllm`
-
-Copy the example and edit it:
+To authenticate API requests, include the API key in the `X-API-Key` header:
 
 ```bash
-cp .env.vllm.example .env.vllm
+curl -H "X-API-Key: YOUR_API_KEY_HERE" http://localhost:8080/v1/calls
+```
+
+Example with a file upload:
+```bash
+curl -H "X-API-Key: YOUR_API_KEY_HERE" \
+     -F "file=@audio.wav" \
+     http://localhost:8080/v1/jobs/upload
+```
+
+Public endpoints (like `/health`) do not require authentication.
+
+## Configuration
+
+The framework is configured through environment variables in the `.env` file:
+
+### Core Settings
+- `PARLONACORE_VERSION`: Version of the ParlonaCore images to use
+- `REDIS_PASSWORD`: Password for Redis authentication
+- `STORAGE_DIR`: Directory for temporary file storage
+- `CALL_API_KEY`: Automatically generated API key for endpoint authentication
+
+### Database Settings
+- `POSTGRES_USER`: PostgreSQL username
+- `POSTGRES_PASSWORD`: PostgreSQL password
+- `POSTGRES_DB`: PostgreSQL database name
+
+### STT Settings
+- `STT_DIARIZATION_MODE`: Diarization mode (`stereo_channels` or `mono`)
+- `STT_STEREO_SPEAKER_MAPPING`: Speaker mapping for stereo diarization
+- `WHISPER_MODEL_DIR`: Directory for Whisper model caching
+- `WHISPER_LOCAL_ONLY`: Set to "1" for offline operation
+
+### GPU Acceleration for STT
+For GPU acceleration of the speech-to-text service:
+1. Ensure you have the NVIDIA Container Toolkit installed
+2. Set `STT_ENABLE_GPU=1` in your `.env` file:
+   ```bash
+   # Enable GPU acceleration for STT service
+   STT_ENABLE_GPU=1
+   ```
+3. The STT service will automatically detect GPU availability and configure appropriate models
+
+### LLM Settings
+- `LLM_BACKEND`: Backend provider (`openai`, `vllm`, `groq`, `ollama`)
+- `LLM_API_KEY`: API key for cloud providers
+- `LLM_BASE_URL`: Base URL for self-hosted LLMs
+- `LLM_MODEL`: Model name to use for summarization
+
+## API Endpoints
+
+- `POST /v1/jobs/upload`: Submit an audio file for processing (requires API key)
+- `GET /v1/jobs`: List all processing jobs (requires API key)
+- `GET /v1/jobs/{job_id}`: Get details for a specific job (requires API key)
+- `GET /v1/calls`: List processed calls (requires API key)
+- `GET /v1/calls/{call_id}`: Get details for a specific call (requires API key)
+- `GET /health`: Health check endpoint (public)
+- `GET /v1/health`: Health check endpoint (public)
+
+## Development
+
+For development, use the dev compose file:
+```bash
+docker compose -f docker-compose.dev.yml up --build
+```
+
+For GPU-accelerated development, set `STT_ENABLE_GPU=1` in your `.env` file:
+```bash
+# Enable GPU acceleration
+STT_ENABLE_GPU=1
+docker compose -f docker-compose.dev.yml up --build
+```
+
+## License
+
+APACHE 2.0
