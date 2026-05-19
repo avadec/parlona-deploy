@@ -61,6 +61,50 @@ check_port() {
   fi
 }
 
+check_disk_space() {
+  local min_gb="${MIN_DOCKER_FREE_GB:-15}"
+  local docker_root
+  local docker_mount
+  local available_kb
+  local available_gb
+
+  docker_root="$(docker info --format '{{.DockerRootDir}}' 2>/dev/null || true)"
+  if [ -z "$docker_root" ]; then
+    return 0
+  fi
+
+  docker_mount="$docker_root"
+  while [ ! -e "$docker_mount" ] && [ "$docker_mount" != "/" ]; do
+    docker_mount="$(dirname "$docker_mount")"
+  done
+
+  available_kb="$(df -Pk "$docker_mount" | awk 'NR==2 {print $4}')"
+  available_gb="$((available_kb / 1024 / 1024))"
+
+  if [ "$available_gb" -lt "$min_gb" ]; then
+    cat >&2 <<EOF
+Docker does not have enough free disk space.
+
+Docker root: ${docker_root}
+Available:   ${available_gb} GB
+Required:    ${min_gb} GB minimum
+
+Free space before installing VoiceCore. Common cleanup commands:
+  docker system df
+  docker system prune
+  docker image prune -a
+  docker volume prune
+
+Be careful: prune commands remove unused Docker data. Do not remove volumes
+that contain data you still need.
+
+You can override the threshold with:
+  MIN_DOCKER_FREE_GB=25 ./install.sh
+EOF
+    exit 1
+  fi
+}
+
 require_command docker
 require_command openssl
 
@@ -78,6 +122,8 @@ Common fixes:
 EOF
   exit 1
 fi
+
+check_disk_space
 
 if [ ! -f .env ]; then
   echo ".env not found. Run ./install.sh first." >&2
