@@ -1,0 +1,13 @@
+services:
+  nginx:
+    image: nginx:1.27-alpine
+    volumes:
+      - ./examples/nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    ports:
+      - "80:80"
+    depends_on:
+      - frontend
+      - call_analytics_api
+    networks:
+      - voicecore_network
+    restart: unless-stopped

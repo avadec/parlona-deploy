@@ -1,0 +1,15 @@
+services:
+  stt_service:
+    environment:
+      STT_ENABLE_GPU: "1"
+      FORCE_CPU: "0"
+      WHISPER_DEVICE: cuda
+      WHISPER_COMPUTE_TYPE: float16
+      STT_MODEL_NAME: ${STT_MODEL_NAME:-Systran/faster-whisper-medium}
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]

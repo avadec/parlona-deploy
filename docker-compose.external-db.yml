@@ -1,0 +1,20 @@
+services:
+  db:
+    profiles:
+      - disabled
+
+  call_analytics_api:
+    environment:
+      POSTGRES_DSN: ${POSTGRES_DSN:?POSTGRES_DSN is required when using external DB}
+      POSTGRES_DSN_PSYCOPG: ${POSTGRES_DSN_PSYCOPG:?POSTGRES_DSN_PSYCOPG is required when using external DB}
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  postprocess_service:
+    environment:
+      POSTGRES_DSN: ${POSTGRES_DSN:?POSTGRES_DSN is required when using external DB}
+      POSTGRES_DSN_PSYCOPG: ${POSTGRES_DSN_PSYCOPG:?POSTGRES_DSN_PSYCOPG is required when using external DB}
+    depends_on:
+      redis:
+        condition: service_healthy

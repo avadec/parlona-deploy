@@ -1,149 +1,91 @@
-# ParlonaCore Call Analytics Framework
+# VoiceCore Deploy
 
-ParlonaCore is an open-source framework for processing and analyzing voice conversations. It provides a complete pipeline for speech-to-text transcription, conversation summarization, and structured data storage.
+Customer deployment bundle for VoiceCore Docker images.
 
-## Features
-
-- **Speech-to-Text Transcription**: Powered by Faster-Whisper for accurate transcription with optional speaker diarization
-- **Conversation Summarization**: Automatic generation of concise summaries using LLMs
-- **Secure Architecture**: Redis with password authentication and protected mode
-- **Flexible Deployment**: Pre-built Docker images for easy deployment
-- **Multi-Backend LLM Support**: Compatible with OpenAI, vLLM, Groq, and Ollama
-- **Database Storage**: PostgreSQL integration for persistent data storage
-- **API Key Authentication**: Secure access to protected endpoints with generated API keys
+This repository contains configuration, Docker Compose files, and operational scripts only. It does not build VoiceCore images and does not contain application source code.
 
 ## Quick Start
 
-1. Copy the example environment file:
-   ```bash
-   cp .env.example .env
-   ```
-
-2. Edit `.env` to set your desired configuration, including strong passwords:
-   ```bash
-   # Change to a strong password
-   REDIS_PASSWORD=your_strong_password_here
-   
-   # Database credentials
-   POSTGRES_USER=your_db_user
-   POSTGRES_PASSWORD=your_db_password
-   POSTGRES_DB=your_db_name
-   ```
-
-3. Run the deployment script to generate an API key and start services:
-   ```bash
-   ./deploy_parlonacore.sh
-   ```
-
-4. The deployment script will display your API key. Use this key to authenticate API requests.
-
-## Architecture
-
-The system consists of four main services orchestrated by Docker Compose:
-
-1. **API Service** (`call_analytics_api`): REST API for job submission and result retrieval
-2. **STT Service** (`stt_service`): Speech-to-text processing with automatic GPU/CPU detection
-3. **Summary Service** (`summary_service`): Conversation summarization using external LLMs
-4. **Postprocess Service** (`postprocess_service`): Data persistence to PostgreSQL
-
-Services communicate through Redis queues for asynchronous processing.
-
-## Security Notice
-
-Starting with version 1.0.0, ParlonaCore implements enhanced security measures:
-
-1. **Redis Authentication**: Redis now requires password authentication
-2. **Network Isolation**: Services communicate through isolated Docker networks
-3. **Protected Mode**: Redis runs in protected mode to prevent unauthorized access
-4. **API Key Authentication**: All protected endpoints require a valid API key
-
-**Important**: Always change the default `REDIS_PASSWORD` in your `.env` file to a strong, unique password before deploying.
-
-## API Authentication
-
-After running the deployment script, an API key is automatically generated and added to your `.env` file. This key is required for all protected endpoints:
-
 ```bash
-# Example API key (automatically generated)
-CALL_API_KEY=71c9ea972b799c0b9029cd1fc4cb62d51db11ed1b2ff268de1fa259221d49497
+git clone https://github.com/parlona/voicecore-deploy.git
+cd voicecore-deploy
+./install.sh --version 1.3.0 --hostname YOUR_SERVER_IP
 ```
 
-To authenticate API requests, include the API key in the `X-API-Key` header:
+After installation, the script prints the dashboard URL, API URL, dashboard credentials, and API key.
+
+## Requirements
+
+- Linux server or VM
+- Docker Engine
+- Docker Compose v2
+- `openssl`
+- Internet access to Docker Hub and the selected LLM/STT model providers
+
+For private Docker Hub repositories, log in first:
 
 ```bash
-curl -H "X-API-Key: YOUR_API_KEY_HERE" http://localhost:8080/v1/calls
+docker login
 ```
 
-Example with a file upload:
+## Main Files
+
+- `docker-compose.yml` - standard single-machine deployment using prebuilt Docker images.
+- `docker-compose.gpu.yml` - optional NVIDIA GPU overlay for STT.
+- `docker-compose.keycloak.yml` - optional bundled development Keycloak.
+- `.env.example` - customer configuration template.
+- `install.sh` - first-time installer.
+- `upgrade.sh` - version upgrade helper.
+- `validate.sh` - support/health diagnostics.
+- `backup.sh` and `restore.sh` - basic database and audio storage backup helpers.
+
+## Common Commands
+
 ```bash
-curl -H "X-API-Key: YOUR_API_KEY_HERE" \
-     -F "file=@audio.wav" \
-     http://localhost:8080/v1/jobs/upload
-```
+# Install with defaults
+./install.sh
 
-Public endpoints (like `/health`) do not require authentication.
+# Install a specific version
+./install.sh --version 1.3.0
+
+# Install with GPU STT support
+./install.sh --with-gpu
+
+# Upgrade
+./upgrade.sh 1.4.0
+
+# Validate
+./validate.sh
+
+# View logs
+docker compose logs -f
+
+# Stop
+docker compose down
+```
 
 ## Configuration
 
-The framework is configured through environment variables in the `.env` file:
+Edit `.env` after running `./install.sh` if needed. Important values:
 
-### Core Settings
-- `PARLONACORE_VERSION`: Version of the ParlonaCore images to use
-- `REDIS_PASSWORD`: Password for Redis authentication
-- `STORAGE_DIR`: Directory for temporary file storage
-- `CALL_API_KEY`: Automatically generated API key for endpoint authentication
+- `VOICECORE_VERSION` - Docker image tag for all VoiceCore services.
+- `PUBLIC_FRONTEND_URL` - dashboard URL users open in a browser.
+- `PUBLIC_API_URL` / `NEXT_PUBLIC_API_URL` - API URL exposed to integrations/browser code.
+- `AUTH_USERS` - simple dashboard users when `KEYCLOAK_ENABLED=0`.
+- `CALL_API_KEY` - API key for machine-to-machine API access.
+- `LLM_BACKEND` and provider-specific values - summary model configuration.
 
-### Database Settings
-- `POSTGRES_USER`: PostgreSQL username
-- `POSTGRES_PASSWORD`: PostgreSQL password
-- `POSTGRES_DB`: PostgreSQL database name
+Prefer pinned image tags such as `1.3.0`; avoid production deployments based on `latest`.
 
-### STT Settings
-- `STT_DIARIZATION_MODE`: Diarization mode (`stereo_channels` or `mono`)
-- `STT_STEREO_SPEAKER_MAPPING`: Speaker mapping for stereo diarization
-- `WHISPER_MODEL_DIR`: Directory for Whisper model caching
-- `WHISPER_LOCAL_ONLY`: Set to "1" for offline operation
+## Services
 
-### GPU Acceleration for STT
-For GPU acceleration of the speech-to-text service:
-1. Ensure you have the NVIDIA Container Toolkit installed
-2. Set `STT_ENABLE_GPU=1` in your `.env` file:
-   ```bash
-   # Enable GPU acceleration for STT service
-   STT_ENABLE_GPU=1
-   ```
-3. The STT service will automatically detect GPU availability and configure appropriate models
+- `call_analytics_api` - REST API on port `8080` by default.
+- `stt_service` - speech-to-text worker.
+- `summary_service` - LLM summarization worker.
+- `postprocess_service` - database persistence worker.
+- `frontend` - dashboard on port `3000` by default.
+- `redis` and `db` - bundled Redis/PostgreSQL for single-machine deployments.
 
-### LLM Settings
-- `LLM_BACKEND`: Backend provider (`openai`, `vllm`, `groq`, `ollama`)
-- `LLM_API_KEY`: API key for cloud providers
-- `LLM_BASE_URL`: Base URL for self-hosted LLMs
-- `LLM_MODEL`: Model name to use for summarization
+## Notes
 
-## API Endpoints
-
-- `POST /v1/jobs/upload`: Submit an audio file for processing (requires API key)
-- `GET /v1/jobs`: List all processing jobs (requires API key)
-- `GET /v1/jobs/{job_id}`: Get details for a specific job (requires API key)
-- `GET /v1/calls`: List processed calls (requires API key)
-- `GET /v1/calls/{call_id}`: Get details for a specific call (requires API key)
-- `GET /health`: Health check endpoint (public)
-- `GET /v1/health`: Health check endpoint (public)
-
-## Development
-
-For development, use the dev compose file:
-```bash
-docker compose -f docker-compose.dev.yml up --build
-```
-
-For GPU-accelerated development, set `STT_ENABLE_GPU=1` in your `.env` file:
-```bash
-# Enable GPU acceleration
-STT_ENABLE_GPU=1
-docker compose -f docker-compose.dev.yml up --build
-```
-
-## License
-
-APACHE 2.0
+The frontend image may bake some browser-facing `NEXT_PUBLIC_*` values at build time depending on the app version. For customer-specific public URLs or SSO settings, verify the released image supports runtime configuration before publishing it as a generic image.
