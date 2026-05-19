@@ -41,7 +41,21 @@ require_command() {
 
 check_port() {
   local port="$1"
+  if [ "${SKIP_PORT_CHECK:-0}" = "1" ]; then
+    return 0
+  fi
+
   if command -v lsof >/dev/null 2>&1 && lsof -nP -iTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1; then
+    echo "Port $port is already in use." >&2
+    exit 1
+  fi
+
+  if command -v ss >/dev/null 2>&1 && ss -ltn "( sport = :${port} )" | grep -q ":${port}"; then
+    echo "Port $port is already in use." >&2
+    exit 1
+  fi
+
+  if command -v netstat >/dev/null 2>&1 && netstat -ltn 2>/dev/null | grep -q "[.:]${port} "; then
     echo "Port $port is already in use." >&2
     exit 1
   fi

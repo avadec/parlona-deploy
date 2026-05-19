@@ -101,5 +101,17 @@ fi
 
 docker compose "${COMPOSE_FILES[@]}" up -d
 
-API_PORT="${API_PORT:-8080}" FRONTEND_PORT="${FRONTEND_PORT:-3000}" ./scripts/wait-health.sh || true
+if ! API_PORT="${API_PORT:-8080}" FRONTEND_PORT="${FRONTEND_PORT:-3000}" ./scripts/wait-health.sh; then
+  echo
+  echo "VoiceCore did not become healthy. Current container state:"
+  docker compose "${COMPOSE_FILES[@]}" ps -a
+  echo
+  echo "Recent API logs:"
+  docker compose "${COMPOSE_FILES[@]}" logs --tail=80 call_analytics_api || true
+  echo
+  echo "Recent frontend logs:"
+  docker compose "${COMPOSE_FILES[@]}" logs --tail=80 frontend || true
+  exit 1
+fi
+
 ./scripts/print-status.sh
