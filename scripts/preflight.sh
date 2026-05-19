@@ -1,9 +1,40 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+print_docker_install_help() {
+  cat >&2 <<'EOF'
+Docker was not found on this machine.
+
+Install Docker before running VoiceCore:
+
+Ubuntu/Debian:
+  curl -fsSL https://get.docker.com | sh
+  sudo usermod -aG docker "$USER"
+  newgrp docker
+  docker --version
+  docker compose version
+
+RHEL/CentOS/Rocky:
+  Follow Docker's official "Install Docker Engine" guide for your distro,
+  then verify:
+  docker --version
+  docker compose version
+
+macOS/Windows:
+  Install Docker Desktop and start it before running ./install.sh.
+
+If Docker is installed but this script cannot find it, make sure the docker
+binary is on PATH for the current shell.
+EOF
+}
+
 require_command() {
   if ! command -v "$1" >/dev/null 2>&1; then
-    echo "Missing required command: $1" >&2
+    if [ "$1" = "docker" ]; then
+      print_docker_install_help
+    else
+      echo "Missing required command: $1" >&2
+    fi
     exit 1
   fi
 }
@@ -20,7 +51,19 @@ require_command docker
 require_command openssl
 
 docker compose version >/dev/null
-docker info >/dev/null
+if ! docker info >/dev/null 2>&1; then
+  cat >&2 <<'EOF'
+Docker is installed, but the Docker daemon is not reachable.
+
+Common fixes:
+- Start Docker Desktop on macOS/Windows.
+- Start Docker Engine on Linux: sudo systemctl start docker
+- Add your user to the docker group, then open a new shell:
+  sudo usermod -aG docker "$USER"
+  newgrp docker
+EOF
+  exit 1
+fi
 
 if [ ! -f .env ]; then
   echo ".env not found. Run ./install.sh first." >&2

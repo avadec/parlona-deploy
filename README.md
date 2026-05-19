@@ -22,6 +22,20 @@ After installation, the script prints the dashboard URL, API URL, dashboard cred
 - `openssl`
 - Internet access to Docker Hub and the selected LLM/STT model providers
 
+Install Docker first if `./install.sh` reports that `docker` is missing.
+
+Ubuntu/Debian:
+
+```bash
+curl -fsSL https://get.docker.com | sh
+sudo usermod -aG docker "$USER"
+newgrp docker
+docker --version
+docker compose version
+```
+
+macOS/Windows: install Docker Desktop and start it before running `./install.sh`.
+
 For private Docker Hub repositories, log in first:
 
 ```bash
