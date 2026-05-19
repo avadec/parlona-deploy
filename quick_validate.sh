@@ -89,13 +89,21 @@ if [ -z "$RUNNING" ]; then
             # Run validation
             echo -e "${BLUE}Running validation...${NC}"
             echo ""
-            ./validate_config.sh "$@"
+            if [ "$#" -eq 0 ] && [ -f "dialogue1s_short.wav" ]; then
+                ./validate_config.sh --stt-audio dialogue1s_short.wav --llm-transcript
+            else
+                ./validate_config.sh "$@"
+            fi
             ;;
         2)
             echo ""
             echo -e "${BLUE}Running local validation...${NC}"
             echo ""
-            ./validate_config.sh --local "$@"
+            if [ "$#" -eq 0 ] && [ -f "dialogue1s_short.wav" ]; then
+                ./validate_config.sh --local --stt-audio dialogue1s_short.wav --llm-transcript
+            else
+                ./validate_config.sh --local "$@"
+            fi
             ;;
         3)
             echo "Exiting..."
@@ -114,5 +122,9 @@ else
     # Run validation
     echo -e "${BLUE}Running validation...${NC}"
     echo ""
-    ./validate_config.sh "$@"
+    if [ "$#" -eq 0 ] && [ -f "dialogue1s_short.wav" ]; then
+        ./validate_config.sh --stt-audio dialogue1s_short.wav --llm-transcript
+    else
+        ./validate_config.sh "$@"
+    fi
 fi
