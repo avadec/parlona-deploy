@@ -41,22 +41,14 @@ if [ "${running_count:-0}" -eq 0 ]; then
   exit 1
 fi
 
-if ! curl -fsS "http://localhost:${API_PORT:-8080}/health" >/dev/null; then
+if ! API_PORT="${API_PORT:-8080}" FRONTEND_PORT="${FRONTEND_PORT:-3000}" TIMEOUT_SECONDS="${VALIDATE_TIMEOUT_SECONDS:-180}" ./scripts/wait-health.sh; then
   echo
-  echo "API health check failed at http://localhost:${API_PORT:-8080}/health"
+  echo "Health checks failed."
   echo "Container state:"
   docker compose ps -a
   echo
   echo "Recent API logs:"
   docker compose logs --tail=120 call_analytics_api || true
-  exit 1
-fi
-
-if ! curl -fsS "http://localhost:${FRONTEND_PORT:-3000}/login" >/dev/null; then
-  echo
-  echo "Frontend health check failed at http://localhost:${FRONTEND_PORT:-3000}/login"
-  echo "Container state:"
-  docker compose ps -a
   echo
   echo "Recent frontend logs:"
   docker compose logs --tail=120 frontend || true

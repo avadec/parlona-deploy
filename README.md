@@ -20,6 +20,7 @@ After installation, the script prints the dashboard URL, API URL, dashboard cred
 - Docker Engine
 - Docker Compose v2
 - `openssl`
+- At least 15 GB free in Docker's data directory; more is recommended for STT models and upgrades
 - Internet access to Docker Hub and the selected LLM/STT model providers
 
 Install Docker first if `./install.sh` reports that `docker` is missing.
@@ -35,6 +36,14 @@ docker compose version
 ```
 
 macOS/Windows: install Docker Desktop and start it before running `./install.sh`.
+
+Check Docker disk usage:
+
+```bash
+docker system df
+```
+
+If installation fails with `no space left on device`, free disk in Docker's data directory and rerun `./install.sh`.
 
 For private Docker Hub repositories, log in first:
 
