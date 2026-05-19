@@ -87,6 +87,10 @@ def main():
         
         # Initialize engine
         print("\n  Initializing STT engine...")
+        print("  This can take several minutes on first run while the Whisper model is downloaded and loaded.")
+        print(f"  Model cache directory: {stt_config.model_dir}")
+        print(f"  Local files only: {stt_config.local_files_only}")
+        sys.stdout.flush()
         engine = STTEngine(stt_config)
         init_time = time.time() - start_time
         
@@ -100,6 +104,8 @@ def main():
                 print_status("Test Audio", "FAILED", f"File not found: {audio_path}", is_error=True)
                 return 1
 
+            print("  Running transcription. On CPU this may take longer than the audio duration.")
+            sys.stdout.flush()
             transcribe_start = time.time()
             result = engine.transcribe(
                 str(audio_path),

@@ -204,20 +204,6 @@ if [ "$TEST_STT" = true ]; then
             echo -e "${YELLOW}  Or use --local to run validation locally (requires venv)${NC}"
             EXIT_CODE=1
         else
-            # Build STT validation command for Docker
-            STT_CMD="python3 /app/validate_stt.py"
-            if [ -n "$STT_AUDIO" ]; then
-                # Copy audio file to container if specified
-                AUDIO_BASENAME=$(basename "$STT_AUDIO")
-                docker cp "$STT_AUDIO" voicecore-stt_service-1:/tmp/test_audio.wav 2>/dev/null || \
-                docker cp "$STT_AUDIO" voicecore_stt_service_1:/tmp/test_audio.wav 2>/dev/null || \
-                docker cp "$STT_AUDIO" stt_service:/tmp/test_audio.wav 2>/dev/null || {
-                    echo -e "${YELLOW}⚠${NC} Could not copy audio file. Testing without audio."
-                    STT_AUDIO=""
-                }
-                STT_CMD="$STT_CMD --audio-path /tmp/test_audio.wav"
-            fi
-            
             # Try common container names
             CONTAINER_NAMES=("voicecore-stt_service-1" "voicecore_stt_service_1" "stt_service")
             CONTAINER_FOUND=""
@@ -239,12 +225,25 @@ if [ "$TEST_STT" = true ]; then
                 
                 # Copy container-specific validation script
                 docker cp "$SCRIPT_DIR/validate_stt_container.py" "$CONTAINER_FOUND:/app/validate_stt.py" >/dev/null 2>&1
+
+                # Build STT validation command for Docker
+                STT_CMD=(python3 /app/validate_stt.py)
+                if [ -n "$STT_AUDIO" ]; then
+                    if docker cp "$STT_AUDIO" "$CONTAINER_FOUND:/tmp/test_audio.wav" >/dev/null 2>&1; then
+                        STT_CMD+=(--audio-path /tmp/test_audio.wav)
+                    else
+                        echo -e "${YELLOW}⚠${NC} Could not copy audio file. Testing STT model loading only."
+                    fi
+                fi
                 
                 # Run validation inside container
-                if docker exec "$CONTAINER_FOUND" python3 /app/validate_stt.py; then
+                if docker exec "$CONTAINER_FOUND" "${STT_CMD[@]}"; then
                     echo -e "${GREEN}✓${NC} STT validation completed successfully"
                 else
                     echo -e "${RED}✗${NC} STT validation failed"
+                    echo -e "${YELLOW}  Tip:${NC} If it stopped during model initialization, the model may still be downloading/loading."
+                    echo -e "${YELLOW}       Check logs with:${NC} docker compose logs -f stt_service"
+                    echo -e "${YELLOW}       For first-run online warmup, use WHISPER_LOCAL_ONLY=0 and HF_HUB_OFFLINE=0."
                     EXIT_CODE=1
                 fi
             else
@@ -325,7 +324,7 @@ if [ "$TEST_LLM" = true ]; then
                 docker cp "$SCRIPT_DIR/validate_llm_container.py" "$CONTAINER_FOUND:/app/validate_llm.py" >/dev/null 2>&1
                 
                 # Run validation inside container
-                if docker exec "$CONTAINER_FOUND" python3 /app/validate_llm.py; then
+                if docker exec "$CONTAINER_FOUND" $LLM_CMD; then
                     echo -e "${GREEN}✓${NC} LLM validation completed successfully"
                 else
                     echo -e "${RED}✗${NC} LLM validation failed"
